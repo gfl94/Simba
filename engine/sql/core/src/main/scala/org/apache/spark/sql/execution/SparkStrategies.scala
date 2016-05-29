@@ -60,7 +60,7 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
             SJMRDistanceJoin(leftKeys, rightKeys, r, planLater(left), planLater(right)) :: Nil
           case "CartesianDistanceJoin" =>
             CartesianDistanceJoin(leftKeys, rightKeys, r, planLater(left), planLater(right)) :: Nil
-          case "NestedLoopDistanceJoin" =>
+          case "BDJSpark" =>
             NestedLoopDistanceJoin(leftKeys, rightKeys, r, planLater(left), planLater(right)) :: Nil
           case "NLRTreeDistanceJoin" =>
             NLRTreeDistanceJoin(leftKeys, rightKeys, r, planLater(left), planLater(right)) :: Nil
