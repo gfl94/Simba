@@ -21,7 +21,7 @@ import org.apache.spark.sql.catalyst.analysis.TypeCheckResult
 import org.apache.spark.sql.catalyst.expressions.codegen.{CodeGenContext, CodegenFallback, GeneratedExpressionCode}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.util.{NumberConverter, TypeUtils}
-import org.apache.spark.sql.spatial.{MBR, Point, Shape, Circle}
+import org.apache.spark.sql.spatial._
 import org.apache.spark.sql.types._
 import org.apache.spark.util.Utils
 
@@ -292,6 +292,19 @@ case class InCircleRange(point: Expression,
     require(eval_point.coord.length == eval_target.coord.length)
     val eval_r = NumberConverter.literalToDouble(r)
     Circle(eval_target, eval_r).contains(eval_point)
+  }
+}
+
+case class PolygonIntersect(polygon: Expression, target: Literal)
+  extends Predicate with CodegenFallback {
+  override def children: Seq[Expression] = Seq(polygon, target)
+  override def nullable: Boolean = false
+  override def toString: String = s" **($polygon) intersects ($target)** "
+
+  override def eval(input: InternalRow): Any = {
+    val eval_shape = polygon.eval(input).asInstanceOf[Shape]
+    val eval_target = target.value.asInstanceOf[Polygon]
+    eval_shape.intersects(eval_target)
   }
 }
 
