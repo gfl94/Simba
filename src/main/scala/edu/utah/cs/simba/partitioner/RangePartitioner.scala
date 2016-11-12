@@ -1,16 +1,31 @@
-package edu.utah.cs.simba.partitioner
+/*
+ * Copyright 2016 by Simba Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
 
+package edu.utah.cs.simba.partitioner
 
 import java.io.{IOException, ObjectInputStream, ObjectOutputStream}
 
+import edu.utah.cs.simba.util.SimbaSerializer
+import edu.utah.cs.simba.util.Utils
+import org.apache.spark.{Partitioner, SparkConf, SparkEnv}
 import org.apache.spark.rdd.{PartitionPruningRDD, RDD, ShuffledRDD}
 import org.apache.spark.serializer.JavaSerializer
-import org.apache.spark.shuffle.sort.SortShuffleManager
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.SparkSqlSerializer
-import org.apache.spark.util.random.SamplingUtils
-import org.apache.spark.util.{CollectionsUtils, MutablePair, Utils}
-import org.apache.spark.{Partitioner, SparkConf, SparkEnv}
+import org.apache.spark.util.MutablePair
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -21,9 +36,8 @@ import scala.util.hashing._
   * Created by dong on 1/15/16.
   * Range Partitioner (slightly hacked from the version from Spark Core)
   */
-private[spark] object RangePartition {
-//  def sortBasedShuffleOn: Boolean = SparkEnv.get.shuffleManager.isInstanceOf[SortShuffleManager]
-  def sortBasedShuffleOn: Boolean = false
+object RangePartition {
+  def sortBasedShuffleOn: Boolean = SparkEnv.get.conf.get("spark.shuffle.manager") != "hash"
 
   def apply[K : Ordering: ClassTag, T](origin: RDD[(K, (T, InternalRow))], num_partitions: Int)
   : (RDD[(K, (T, InternalRow))], Array[K]) = {
@@ -38,7 +52,7 @@ private[spark] object RangePartition {
 
     val part = new RangePartitioner(num_partitions, rdd, ascending = true)
     val shuffled = new ShuffledRDD[K, (T, InternalRow), (T, InternalRow)](rdd, part)
-//    shuffled.setSerializer(new SparkSqlSerializer(new SparkConf(false)))
+    shuffled.setSerializer(new SimbaSerializer(new SparkConf(false)))
 
     (shuffled, part.rangeBounds)
   }
@@ -56,12 +70,12 @@ private[spark] object RangePartition {
 
     val part = new RangePartitioner(num_partitions, rdd, ascending = true)
     val shuffled = new ShuffledRDD[Double, InternalRow, InternalRow](rdd, part)
-//    shuffled.setSerializer(new SparkSqlSerializer(new SparkConf(false)))
+    shuffled.setSerializer(new SimbaSerializer(new SparkConf(false)))
     (shuffled, part.rangeBounds)
   }
 }
 
-private[sql] class RangePartitioner[K : Ordering : ClassTag, V](@transient partitions: Int,
+class RangePartitioner[K : Ordering : ClassTag, V](@transient partitions: Int,
                                                    @transient rdd: RDD[_ <: Product2[K, V]],
                                                    private var ascending: Boolean = true)
   extends Partitioner {
@@ -72,7 +86,7 @@ private[sql] class RangePartitioner[K : Ordering : ClassTag, V](@transient parti
   private var ordering = implicitly[Ordering[K]]
 
   // An array of upper bounds for the first (partitions - 1) partitions
-  private[sql] var rangeBounds: Array[K] = {
+  private[simba] var rangeBounds: Array[K] = {
     if (partitions <= 1) {
       Array.empty
     } else {
@@ -115,7 +129,7 @@ private[sql] class RangePartitioner[K : Ordering : ClassTag, V](@transient parti
 
   def numPartitions: Int = rangeBounds.length + 1
 
-  private var binarySearch: ((Array[K], K) => Int) = CollectionsUtils.makeBinarySearch[K]
+  private var binarySearch: ((Array[K], K) => Int) = Utils.makeBinarySearch[K]
 
   def getPartition(key: Any): Int = {
     val k = key.asInstanceOf[K]
@@ -199,7 +213,7 @@ private[sql] class RangePartitioner[K : Ordering : ClassTag, V](@transient parti
   }
 }
 
-private[sql] object RangePartitioner {
+private[simba] object RangePartitioner {
 
   /**
     * Sketches the input RDD via reservoir sampling on each partition.
@@ -208,14 +222,12 @@ private[sql] object RangePartitioner {
     * @param sampleSizePerPartition max sample size per partition
     * @return (total number of items, an array of (partitionId, number of items, sample))
     */
-  def sketch[K : ClassTag](
-                            rdd: RDD[K],
-                            sampleSizePerPartition: Int): (Long, Array[(Int, Long, Array[K])]) = {
+  def sketch[K : ClassTag](rdd: RDD[K], sampleSizePerPartition: Int) :(Long, Array[(Int, Long, Array[K])]) = {
     val shift = rdd.id
     // val classTagK = classTag[K] // to avoid serializing the entire partitioner object
     val sketched = rdd.mapPartitionsWithIndex { (idx, iter) =>
       val seed = byteswap32(idx ^ (shift << 16))
-      val (sample, n) = SamplingUtils.reservoirSampleAndCount(
+      val (sample, n) = Utils.reservoirSampleAndCount(
         iter, sampleSizePerPartition, seed)
       Iterator((idx, n, sample))
     }.collect()
@@ -231,9 +243,7 @@ private[sql] object RangePartitioner {
     * @param partitions number of partitions
     * @return selected bounds
     */
-  def determineBounds[K : Ordering : ClassTag](
-                                                candidates: ArrayBuffer[(K, Float)],
-                                                partitions: Int): Array[K] = {
+  def determineBounds[K : Ordering : ClassTag](candidates: ArrayBuffer[(K, Float)], partitions: Int): Array[K] = {
     val ordering = implicitly[Ordering[K]]
     val ordered = candidates.sortBy(_._1)
     val numCandidates = ordered.size

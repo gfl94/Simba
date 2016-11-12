@@ -3,7 +3,7 @@ package edu.utah.cs.simba.IndexRelation
 import edu.utah.cs.simba.{IndexRDD, ShapeType}
 import edu.utah.cs.simba.index.RTree
 import edu.utah.cs.simba.partitioner.STRPartition
-import edu.utah.cs.simba.util.{FetchPointUtils, DevStub}
+import edu.utah.cs.simba.util.{DevStub, FetchPointUtils}
 import org.apache.spark.sql.catalyst.analysis.MultiInstanceRelation
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.plans.logical.Statistics
@@ -14,7 +14,7 @@ import org.apache.spark.storage.StorageLevel
 /**
   * Created by gefei on 16-6-21.
   */
-private[sql] case class RTreeIndexedRelation(
+private[simba] case class RTreeIndexedRelation(
       output: Seq[Attribute],
       child: SparkPlan,
       table_name: Option[String],
@@ -50,15 +50,11 @@ private[sql] case class RTreeIndexedRelation(
     buildIndex()
   }
 
-  private[sql] def buildIndex(): Unit = {
-//    val numShufflePartitions = child.sqlContext.conf.numShufflePartitions
-//    val maxEntriesPerNode = child.sqlContext.conf.maxEntriesPerNode
-//    val sampleRate = child.sqlContext.conf.sampleRate
-//    val transferThreshold = child.sqlContext.conf.transferThreshold
-    val numShufflePartitions = DevStub.numShuffledPartitions
-    val maxEntriesPerNode = DevStub.maxEntriesPerNode
-    val sampleRate = DevStub.sampleRate
-    val transferThreshold = DevStub.transferThreshold
+  private[simba] def buildIndex(): Unit = {
+    val numShufflePartitions = simbaConf.indexPartitions
+    val maxEntriesPerNode = simbaConf.maxEntriesPerNode
+    val sampleRate = simbaConf.sampleRate
+    val transferThreshold = simbaConf.transferThreshold
     val dataRDD = child.execute().map(row => {
       (FetchPointUtils.getFromRow(row, column_keys, child, isPoint), row)
     })
@@ -104,7 +100,6 @@ private[sql] case class RTreeIndexedRelation(
   @transient override lazy val statistics = Statistics(
     // TODO: Instead of returning a default value here, find a way to return a meaningful size
     // estimate for RDDs. See PR 1238 for more discussions.
-//    sizeInBytes = BigInt(child.sqlContext.conf.defaultSizeInBytes)
-    sizeInBytes = BigInt(DevStub.defaultSizeInBytes)
+    sizeInBytes = BigInt(simbaConf.indexSizeThreshold)
   )
 }

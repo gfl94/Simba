@@ -14,7 +14,7 @@ import org.apache.spark.storage.StorageLevel
 /**
   * Created by gefei on 2016/11/11.
   */
-case class TreapIndexedRelation(output: Seq[Attribute],
+private[simba] case class TreapIndexedRelation(output: Seq[Attribute],
                                 child: SparkPlan,
                                 table_name: Option[String],
                                 column_keys: List[Attribute],
@@ -23,15 +23,15 @@ case class TreapIndexedRelation(output: Seq[Attribute],
   extends IndexedRelation with MultiInstanceRelation{
   require(column_keys.length == 1)
   require(column_keys.head.dataType.isInstanceOf[NumericType])
-  val numShufflePartitions = DevStub.numShuffledPartitions
-  val maxEntriesPerNode = DevStub.maxEntriesPerNode
-  val sampleRate = DevStub.sampleRate
+  val numShufflePartitions = simbaConf.indexPartitions
+  val maxEntriesPerNode = simbaConf.maxEntriesPerNode
+  val sampleRate = simbaConf.sampleRate
 
   if (_indexedRDD == null) {
     buildIndex()
   }
 
-  private[sql] def buildIndex(): Unit = {
+  private[simba] def buildIndex(): Unit = {
     val dataRDD = child.execute().map(row => {
       val eval_key = BindReferences.bindReference(column_keys.head, child.output).eval(row)
         .asInstanceOf[Double]
@@ -64,6 +64,6 @@ case class TreapIndexedRelation(output: Seq[Attribute],
   @transient override lazy val statistics = Statistics(
     // TODO: Instead of returning a default value here, find a way to return a meaningful size
     // estimate for RDDs. See PR 1238 for more discussions.
-    sizeInBytes = BigInt(DevStub.defaultSizeInBytes)
+    sizeInBytes = BigInt(simbaConf.indexSizeThreshold)
   )
 }

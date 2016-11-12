@@ -17,6 +17,7 @@
 
 package edu.utah.cs.simba.partitioner
 
+import edu.utah.cs.simba.spatial.Point
 import edu.utah.cs.simba.util.SimbaSerializer
 import org.apache.spark.{Partitioner, SparkConf, SparkEnv}
 import org.apache.spark.rdd.{RDD, ShuffledRDD}
@@ -24,33 +25,35 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.util.MutablePair
 
 /**
-  * Created by dong on 1/15/16.
-  * Linear Hash Partitioner with Java hashcode
+  * Created by dong on 1/20/16.
+  * Voronoi Partitioner which assigns points to its nearest pivot
   */
-object HashPartition {
-  def sortBasedShuffleOn: Boolean = SparkEnv.get.conf.get("spark.shuffle.manager") != "hash"
+object VoronoiPartition {
+  def sortBasedShuffledOn: Boolean = SparkEnv.get.conf.get("spark.shuffle.manager") != "hash"
 
-  def apply(origin: RDD[(Any, InternalRow)], num_partitions: Int): RDD[(Any, InternalRow)] = {
-    val rdd = if (sortBasedShuffleOn) {
-      origin.mapPartitions {iter => iter.map(row => (row._1, row._2.copy()))}
+  def apply(origin: RDD[(Int, (Point, InternalRow))], pivot_to_group: Array[Int], num_group: Int)
+  : RDD[(Int, (Point, InternalRow))] = {
+    val rdd = if (sortBasedShuffledOn) {
+      origin.mapPartitions {iter => iter.map(row => (row._1, (row._2._1, row._2._2.copy())))}
     } else {
       origin.mapPartitions {iter =>
-        val mutablePair = new MutablePair[Any, InternalRow]()
-        iter.map(row => mutablePair.update(row._1, row._2.copy()))
+        val mutablePair = new MutablePair[Int, (Point, InternalRow)]()
+        iter.map(row => mutablePair.update(row._1, (row._2._1, row._2._2.copy())))
       }
     }
 
-    val part = new HashPartitioner(num_partitions)
-    val shuffled = new ShuffledRDD[Any, InternalRow, InternalRow](rdd, part)
+    val part = new VoronoiPartitioner(pivot_to_group, num_group)
+    val shuffled = new ShuffledRDD[Int, (Point, InternalRow), (Point, InternalRow)](rdd, part)
     shuffled.setSerializer(new SimbaSerializer(new SparkConf(false)))
     shuffled
   }
 }
 
-class HashPartitioner(num_partitions: Int) extends Partitioner {
-  override def numPartitions: Int = num_partitions
+class VoronoiPartitioner(pivot_to_group: Array[Int], num_group: Int) extends Partitioner {
+  override def numPartitions: Int = num_group
 
   override def getPartition(key: Any): Int = {
-    key.hashCode() % num_partitions
+    val k = key.asInstanceOf[Int]
+    pivot_to_group(k)
   }
 }

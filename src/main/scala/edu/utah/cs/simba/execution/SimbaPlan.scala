@@ -15,23 +15,17 @@
  *
  */
 
-package edu.utah.cs.simba.index
+package edu.utah.cs.simba.execution
 
-import org.apache.spark.sql.catalyst.InternalRow
+import edu.utah.cs.simba.SimbaContext
+import org.apache.spark.sql.execution.SparkPlan
 
 /**
- * Created by dong on 1/15/16.
- * Encapsulated TreeMap Index
- */
-class TreeMapIndex[T] extends Index with Serializable {
-  var index = new java.util.TreeMap[T, Int]()
-}
+  * Created by dongx on 11/11/16.
+  */
+abstract class SimbaPlan extends SparkPlan{
+  @transient
+  protected[simba] final val simbaContext = SimbaContext.getActive.orNull
 
-object TreeMapIndex {
-  def apply[T](data: Array[(T, InternalRow)]): TreeMapIndex[T] = {
-    val res = new TreeMapIndex[T]
-    for (i <- data.indices)
-      res.index.put(data(i)._1, i)
-    res
-  }
+  protected override def sparkContext = simbaContext.sparkContext
 }

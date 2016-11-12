@@ -25,32 +25,35 @@ import org.apache.spark.util.MutablePair
 
 /**
   * Created by dong on 1/15/16.
-  * Linear Hash Partitioner with Java hashcode
+  * Determined Key-Mapping Partitioner
   */
-object HashPartition {
+object MapDPartition {
   def sortBasedShuffleOn: Boolean = SparkEnv.get.conf.get("spark.shuffle.manager") != "hash"
 
-  def apply(origin: RDD[(Any, InternalRow)], num_partitions: Int): RDD[(Any, InternalRow)] = {
+  def apply[T](origin: RDD[(Int, (T, InternalRow))],
+               num_partitions: Int): RDD[(Int, (T, InternalRow))] = {
     val rdd = if (sortBasedShuffleOn) {
-      origin.mapPartitions {iter => iter.map(row => (row._1, row._2.copy()))}
+      origin.mapPartitions {iter => iter.map(row => (row._1, (row._2._1, row._2._2.copy())))}
     } else {
       origin.mapPartitions {iter =>
-        val mutablePair = new MutablePair[Any, InternalRow]()
-        iter.map(row => mutablePair.update(row._1, row._2.copy()))
+        val mutablePair = new MutablePair[Int, (T, InternalRow)]()
+        iter.map(row => mutablePair.update(row._1, (row._2._1, row._2._2.copy())))
       }
     }
 
-    val part = new HashPartitioner(num_partitions)
-    val shuffled = new ShuffledRDD[Any, InternalRow, InternalRow](rdd, part)
+    val part = new MapDPartitioner(num_partitions)
+    val shuffled = new ShuffledRDD[Int, (T, InternalRow), (T, InternalRow)](rdd, part)
     shuffled.setSerializer(new SimbaSerializer(new SparkConf(false)))
     shuffled
   }
 }
 
-class HashPartitioner(num_partitions: Int) extends Partitioner {
-  override def numPartitions: Int = num_partitions
-
-  override def getPartition(key: Any): Int = {
-    key.hashCode() % num_partitions
+class MapDPartitioner(num_partitions: Int) extends Partitioner {
+  def numPartitions: Int = num_partitions
+  def getPartition(key: Any): Int = {
+    val k = key.asInstanceOf[Int]
+    require(k >= 0 && k < num_partitions)
+    k
   }
 }
+

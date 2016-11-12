@@ -30,7 +30,7 @@ private[sql] case class TreeMapIndexedRelation(
   }
 
   private[sql] def buildIndex(): Unit = {
-    val numShufflePartitions = DevStub.numShuffledPartitions
+    val numShufflePartitions = simbaConf.indexPartitions
 
     val dataRDD = child.execute().map(row => {
       val eval_key = BindReferences.bindReference(column_keys.head, child.output).eval(row)
@@ -64,6 +64,6 @@ private[sql] case class TreeMapIndexedRelation(
   @transient override lazy val statistics = Statistics(
     // TODO: Instead of returning a default value here, find a way to return a meaningful size
     // estimate for RDDs. See PR 1238 for more discussions.
-    sizeInBytes = BigInt(DevStub.defaultSizeInBytes)
+    sizeInBytes = BigInt(simbaConf.indexSizeThreshold)
   )
 }

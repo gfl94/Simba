@@ -1,10 +1,8 @@
 package edu.utah.cs.simba.IndexRelation
 
-
 import edu.utah.cs.simba.IndexRDD
 import edu.utah.cs.simba.index.HashMapIndex
 import edu.utah.cs.simba.partitioner.HashPartition
-import edu.utah.cs.simba.util.DevStub
 import org.apache.spark.sql.catalyst.analysis.MultiInstanceRelation
 import org.apache.spark.sql.catalyst.expressions.{Attribute, BindReferences}
 import org.apache.spark.sql.catalyst.plans.logical.Statistics
@@ -29,7 +27,7 @@ private[sql] case class HashMapIndexedRelation(
   }
 
   private[sql] def buildIndex(): Unit = {
-    val numShufflePartitions = DevStub.numShuffledPartitions
+    val numShufflePartitions = simbaConf.indexPartitions
 
     val dataRDD = child.execute().map(row => {
       val eval_key = BindReferences.bindReference(column_keys.head, child.output).eval(row)
@@ -59,6 +57,6 @@ private[sql] case class HashMapIndexedRelation(
   @transient override lazy val statistics = Statistics(
     // TODO: Instead of returning a default value here, find a way to return a meaningful size
     // estimate for RDDs. See PR 1238 for more discussions.
-    sizeInBytes = BigInt(DevStub.defaultSizeInBytes)
+    sizeInBytes = BigInt(simbaConf.indexSizeThreshold)
   )
 }
