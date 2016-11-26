@@ -238,15 +238,15 @@ private[simba] class SimbaConf extends Serializable {
     }.toSeq
   }
 
-  private[simba] def unsetConf(key: String): Unit = {
+  def unsetConf(key: String): Unit = {
     settings.remove(key)
   }
 
-  private[simba] def unsetConf(entry: SimbaConfEntry[_]): Unit = {
+  def unsetConf(entry: SimbaConfEntry[_]): Unit = {
     settings.remove(entry.key)
   }
 
-  private[simba] def clear(): Unit = {
+  def clear(): Unit = {
     settings.clear()
   }
 }

@@ -69,7 +69,7 @@ class SimbaContext private[simba](@transient val sc: SparkContext,
   }
 
   override def getConf(key: String, defaultValue: String): String = {
-    if (key.startsWith("simba.")) conf.getConfString(key, defaultValue)
+    if (key.startsWith("simba.")) simbaConf.getConfString(key, defaultValue)
     else conf.getConfString(key, defaultValue)
   }
 
@@ -123,6 +123,8 @@ class SimbaContext private[simba](@transient val sc: SparkContext,
 
     implicit def dfToSimbaDF(df: SQLDataFrame): DataFrame = DataFrame(self, df.queryExecution.logical)
   }
+
+  SimbaContext.setInstantiatedContext(self)
 }
 
 object SimbaContext {
